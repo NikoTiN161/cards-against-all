@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Демо уведомлений - Карты против всех</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="notification-container" id="notificationContainer"></div>
+    <div id="app">
+        <h1>Демо уведомлений</h1>
+        <div style="text-align: center; margin: 30px 0;">
+            <button onclick="showSuccess()">Успех</button>
+            <button onclick="showError()">Ошибка</button>
+            <button onclick="showInfo()">Информация</button>
+            <button onclick="showWarning()">Предупреждение</button>
+            <button onclick="showGameNotifications()">Игровые уведомления</button>
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="index.html" style="color: white; text-decoration: none; background: #4caf50; padding: 15px 30px; border-radius: 10px;">← Вернуться к игре</a>
+        </div>
+    </div>
+
+    <script>
+        // Система уведомлений
+        class NotificationSystem {
+            constructor() {
+                this.container = document.getElementById('notificationContainer');
+                this.notifications = [];
+            }
+
+            show(message, type = 'info', title = '', duration = 5000) {
+                const notification = this.createNotification(message, type, title, duration);
+                this.container.appendChild(notification);
+                this.notifications.push(notification);
+
+                // Автоматическое удаление
+                setTimeout(() => {
+                    this.remove(notification);
+                }, duration);
+
+                return notification;
+            }
+
+            createNotification(message, type, title, duration) {
+                const notification = document.createElement('div');
+                notification.className = `notification ${type}`;
+                
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'notification-close';
+                closeBtn.innerHTML = '×';
+                closeBtn.onclick = () => this.remove(notification);
+                
+                let content = '';
+                if (title) {
+                    content += `<div class="notification-title">${title}</div>`;
+                }
+                content += `<div class="notification-message">${message}</div>`;
+                
+                notification.innerHTML = content;
+                notification.appendChild(closeBtn);
+                
+                return notification;
+            }
+
+            remove(notification) {
+                if (notification && notification.parentNode) {
+                    notification.classList.add('slide-out');
+                    setTimeout(() => {
+                        if (notification.parentNode) {
+                            notification.parentNode.removeChild(notification);
+                        }
+                        const index = this.notifications.indexOf(notification);
+                        if (index > -1) {
+                            this.notifications.splice(index, 1);
+                        }
+                    }, 300);
+                }
+            }
+
+            success(message, title = 'Успех!') {
+                return this.show(message, 'success', title);
+            }
+
+            error(message, title = 'Ошибка!') {
+                return this.show(message, 'error', title);
+            }
+
+            info(message, title = 'Информация') {
+                return this.show(message, 'info', title);
+            }
+
+            warning(message, title = 'Внимание!') {
+                return this.show(message, 'warning', title);
+            }
+        }
+
+        const notifications = new NotificationSystem();
+
+        function showSuccess() {
+            notifications.success('Игра успешно создана! ID: ABC123', 'Игра создана');
+        }
+
+        function showError() {
+            notifications.error('Игра не найдена. Проверьте ID', 'Ошибка подключения');
+        }
+
+        function showInfo() {
+            notifications.info('Алексей присоединился к игре', 'Новый игрок');
+        }
+
+        function showWarning() {
+            notifications.warning('Игрок покинул игру', 'Игрок отключился');
+        }
+
+        function showGameNotifications() {
+            notifications.success('Вы успешно присоединились к игре!', 'Присоединение');
+            
+            setTimeout(() => {
+                notifications.info('Игра началась! Удачи!', 'Начало игры');
+            }, 1000);
+            
+            setTimeout(() => {
+                notifications.success('Карта "Носки с сандалиями" подана!', 'Карта выбрана');
+            }, 2000);
+            
+            setTimeout(() => {
+                notifications.info('Все карты собраны! Ждите решения Гуру', 'Время голосования');
+            }, 3000);
+            
+            setTimeout(() => {
+                notifications.info('Победитель раунда: Алексей!', 'Раунд окончен');
+            }, 4000);
+        }
+    </script>
+</body>
+</html>

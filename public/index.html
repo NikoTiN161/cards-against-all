@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Карты против всех</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="notification-container" id="notificationContainer"></div>
+    <div id="app">
+        <h1 id="header">Карты против всех</h1>
+        <div id="lobby">
+            <input type="text" id="playerName" placeholder="Введите ваше имя">
+            <button id="createGameButton">Создать Игру</button>
+            <button id="joinGameButton">Присоединиться к Игре</button>
+            <input type="text" id="gameId" placeholder="ID игры">
+        </div>
+        <div id="game" style="display:none">
+            <!-- Бургер-меню -->
+            <div id="burgerMenu">
+                <button id="burgerButton" class="burger-button">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+                <div id="burgerContent" class="burger-content">
+                    <div id="gameIdContainer">
+                        <h3>ID игры:</h3>
+                        <div class="game-id-wrapper">
+                            <input type="text" id="gameIdDisplay" readonly>
+                            <button id="copyGameIdButton">Копировать ID</button>
+                        </div>
+                    </div>
+                    <div id="playerList">
+                        <h3>Игроки в комнате:</h3>
+                        <ul id="players"></ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="gameInfo"></div>
+            
+            <!-- Блок для выбранной карты -->
+            <div id="selectedCardDisplay" style="display:none;">
+                <h3>Выбранная карта:</h3>
+                <div id="selectedCardContent" class="selected-card"></div>
+            </div>
+            
+            <div id="hand"></div>
+            <button id="startGameButton">Начать Игру</button>
+            <button id="nextRoundButton">Следующий Раунд</button>
+            <div id="submittedCards"></div>
+        </div>
+    </div>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
