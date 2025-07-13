@@ -283,7 +283,7 @@ socket.on('newRound', (data) => {
     gameState = data.game;
     selectedCard = null;
     // Показать карты снова при новом раунде
-    handDiv.style.display = 'block';
+    handDiv.style.display = 'flex';
     
     const currentPlayer = gameState.players.find(p => p.id === playerId);
     if (currentPlayer?.isGuru) {
