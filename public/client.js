@@ -270,13 +270,19 @@ socket.on('gameUpdated', (data) => {
 
 socket.on('roundEnded', (data) => {
     gameState = data.game;
+    console.log('Round ended:', data);
+    const winnerCardText = data.winnerCardText;
     updateGameInfo();
     updateSubmittedCards();
     
     const winnerName = gameState.players.find(p => p.id === data.winner)?.name || 'Неизвестно';
+    const cardDisplay = selectedCardDisplay.querySelector('h3');
+    cardDisplay.textContent = "Победитель:";
+    selectedCardContent.textContent = winnerCardText;
     setTimeout(() => {
         notifications.info(`Победитель раунда: ${winnerName}!`, 'Раунд окончен');
     }, 1000);
+    
 });
 
 socket.on('newRound', (data) => {
@@ -284,6 +290,9 @@ socket.on('newRound', (data) => {
     selectedCard = null;
     // Показать карты снова при новом раунде
     handDiv.style.display = 'flex';
+    const cardDisplay = selectedCardDisplay.querySelector('h3');
+    cardDisplay.textContent = "Выбранная карта:";
+    selectedCardContent.textContent = '';
     
     const currentPlayer = gameState.players.find(p => p.id === playerId);
     if (currentPlayer?.isGuru) {
@@ -309,6 +318,7 @@ function updateGameInfo() {
     
     const currentPlayer = gameState.players.find(p => p.id === playerId);
     const isGuru = currentPlayer?.isGuru || false;
+    const isHost = currentPlayer?.isHost || false;
     
     let html = `
         <div class="status">
@@ -325,7 +335,8 @@ function updateGameInfo() {
     gameInfo.innerHTML = html;
     
     // Управление кнопками
-    startGameButton.style.display = (gameState.gameState === 'waiting' && gameState.players.length >= 2) ? 'block' : 'none';
+    startGameButton.style.display = (gameState.gameState === 'waiting' && gameState.players.length >= 2 && isHost) ? 'block' : 'none';
+    // startGameButton.style.display = (gameState.gameState === 'waiting' && gameState.players.length >= 2) ? 'block' : 'none';
     nextRoundButton.style.display = (gameState.gameState === 'roundEnd' && isGuru) ? 'block' : 'none';
 }
 
@@ -352,6 +363,12 @@ function updateHand() {
 }
 
 function selectCard(card) {
+    // const currentPlayer = gameState.players.find(p => p.id === playerId);
+    // if (currentPlayer?.isGuru) {
+    //     notifications.error('Вы не можете подавать карты', 'Ошибка');
+    //     return;
+    // }
+
     if (gameState?.gameState !== 'playing') return;
     
     selectedCard = card;
@@ -397,7 +414,7 @@ function updateSubmittedCards() {
             if (isGuru) {
                 cardDiv.classList.add('clickable');
                 cardDiv.addEventListener('click', () => {
-                    socket.emit('selectWinner', { winnerId: playerIdCard });
+                    socket.emit('selectWinner', { winnerId: playerIdCard, cardText: cardText });
                 });
             }
             
@@ -451,7 +468,7 @@ function updatePlayersList() {
 }
 
 function copyGameId() {
-if (currentGameId) {
+    if (currentGameId) {
         const gameUrl = `${window.location.origin}${window.location.pathname}?game=${currentGameId}`;
         navigator.clipboard.writeText(gameUrl).then(() => {
             notifications.success('Ссылка на игру скопирована!', 'Копирование');

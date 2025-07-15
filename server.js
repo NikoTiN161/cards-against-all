@@ -25,17 +25,21 @@ class Game {
         this.players = new Map();
         this.darkCards = [...cardsData.darkCards];
         this.lightCards = [...cardsData.lightCards];
+        this.trashLightCards = [];
+        this.trashDarkCards = [];
         this.currentRound = 0;
         this.currentGuru = null;
         this.currentDarkCard = null;
         this.submittedCards = new Map();
+        this.winnerCardText = null;
         this.gameState = 'waiting'; // waiting, playing, voting, roundEnd
         this.maxPlayers = 10;
         this.minPlayers = 2;
         this.scores = new Map();
+        this.host = null;
     }
 
-    addPlayer(playerId, playerName) {
+    addPlayer(playerId, playerName, isHost) {
         if (this.players.size >= this.maxPlayers) {
             return false;
         }
@@ -45,6 +49,7 @@ class Game {
             name: playerName,
             hand: [],
             isGuru: false,
+            isHost: isHost || false,
             connected: true
         };
         
@@ -72,6 +77,7 @@ class Game {
             const card = this.lightCards.splice(randomIndex, 1)[0];
             player.hand.push(card);
         }
+
     }
 
     dealCardsToAll() {
@@ -133,6 +139,7 @@ class Game {
         if (this.darkCards.length === 0) {
             // Игра окончена
             this.gameState = 'finished';
+            this.winnerCardText = 'Игра окончена!';
             return null;
         }
 
@@ -165,7 +172,7 @@ class Game {
         return true;
     }
 
-    selectWinner(winnerId) {
+    selectWinner(winnerId, cardText) {
         if (this.gameState !== 'voting') return false;
         
         const submittedEntries = Array.from(this.submittedCards.entries());
@@ -176,7 +183,7 @@ class Game {
         // Увеличить счет победителя
         const currentScore = this.scores.get(winnerId) || 0;
         this.scores.set(winnerId, currentScore + 1);
-
+        this.winnerCardText = cardText;
         this.gameState = 'roundEnd';
         return true;
     }
@@ -209,6 +216,7 @@ class Game {
                 id: p.id,
                 name: p.name,
                 isGuru: p.isGuru,
+                isHost: p.isHost,
                 connected: p.connected,
                 handSize: p.hand.length
             })),
@@ -234,7 +242,7 @@ io.on('connection', (socket) => {
         games.set(gameId, game);
         
         // Добавляем создателя как первого игрока
-        if (!game.addPlayer(socket.id, playerName)) {
+        if (!game.addPlayer(socket.id, playerName, true)) {
             socket.emit('error', { message: 'Не удалось создать игру' });
             return;
         }
@@ -248,7 +256,7 @@ io.on('connection', (socket) => {
             gameId, 
             game: game.getGameState(),
             hand: player.hand,
-            playerId: socket.id
+            playerId: socket.id,
         });
     });
 
@@ -320,17 +328,18 @@ io.on('connection', (socket) => {
     });
 
     socket.on('selectWinner', (data) => {
-        const { winnerId } = data;
+        const { winnerId, cardText } = data;
         const game = games.get(socket.gameId);
         if (!game) return;
 
         // Проверить, что выбирает именно гуру
         if (socket.id !== game.currentGuru) return;
 
-        if (game.selectWinner(winnerId)) {
+        if (game.selectWinner(winnerId, cardText)) {
             io.to(socket.gameId).emit('roundEnded', {
                 game: game.getGameState(),
-                winner: winnerId
+                winner: winnerId,
+                winnerCardText: cardText
             });
         }
     });
