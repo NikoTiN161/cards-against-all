@@ -93,6 +93,36 @@ class NotificationSystem {
 
 const notifications = new NotificationSystem();
 
+// --- Переменные для восстановления сессии ---
+function saveSession(playerId, gameId, playerName) {
+    localStorage.setItem('caa_playerId', playerId);
+    localStorage.setItem('caa_gameId', gameId);
+    localStorage.setItem('caa_playerName', playerName);
+}
+function clearSession() {
+    localStorage.removeItem('caa_playerId');
+    localStorage.removeItem('caa_gameId');
+    localStorage.removeItem('caa_playerName');
+}
+function getSession() {
+    return {
+        playerId: localStorage.getItem('caa_playerId'),
+        gameId: localStorage.getItem('caa_gameId'),
+        playerName: localStorage.getItem('caa_playerName'),
+    };
+}
+// --- Переподключение ---
+function tryReconnect() {
+    const session = getSession();
+    if (session.playerId && session.gameId && session.playerName) {
+        socket.emit('reconnectPlayer', {
+            playerId: session.playerId,
+            gameId: session.gameId,
+            playerName: session.playerName
+        });
+    }
+}
+
 // DOM элементы
 const lobby = document.getElementById('lobby');
 const gameDiv = document.getElementById('game');
@@ -181,6 +211,7 @@ socket.on('gameCreated', (data) => {
     playerId = data.playerId;
     playerHand = data.hand;
     currentGameId = data.gameId;
+    saveSession(playerId, currentGameId, playerNameInput.value.trim());
     
     lobby.style.display = 'none';
     header.style.display = 'none';
@@ -203,6 +234,7 @@ socket.on('gameJoined', (data) => {
     gameState = data.game;
     playerId = data.playerId;
     playerHand = data.hand;
+    saveSession(playerId, gameState.id, playerNameInput.value.trim());
     
     lobby.style.display = 'none';
     header.style.display = 'none';
@@ -310,6 +342,34 @@ socket.on('newRound', (data) => {
 
 socket.on('error', (data) => {
     notifications.error(data.message, 'Ошибка');
+});
+
+// При переподключении сокета
+socket.on('reconnect', () => {
+    tryReconnect();
+});
+
+// При загрузке страницы, если есть сессия, пробуем восстановить
+window.addEventListener('DOMContentLoaded', () => {
+    const session = getSession();
+    if (session.playerId && session.gameId && session.playerName) {
+        tryReconnect();
+    }
+});
+
+// Сервер должен вернуть событие 'reconnected' или 'gameJoined' при успехе, либо 'error' при неудаче
+socket.on('reconnected', (data) => {
+    gameState = data.game;
+    playerId = data.playerId;
+    playerHand = data.hand;
+    currentGameId = data.gameId;
+    notifications.success('Сессия восстановлена!', 'Переподключение');
+    lobby.style.display = 'none';
+    header.style.display = 'none';
+    gameDiv.style.display = 'block';
+    updateGameInfo();
+    updatePlayersList();
+    updateHand();
 });
 
 // Функции обновления UI
