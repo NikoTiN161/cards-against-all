@@ -150,25 +150,19 @@ class Game {
 
     submitCard(playerId, cardText) {
         if (this.gameState !== 'playing') return false;
-        if (this.submittedCards.has(playerId)) return false;
-
         const player = this.players.get(playerId);
         if (!player) return false;
-
+        if (player.isGuru) return false;
         const cardIndex = player.hand.indexOf(cardText);
         if (cardIndex === -1) return false;
-
         // НЕ убираем карту из руки игрока сейчас, только помечаем как выбранную
         player.selectedCard = cardText;
-        
         // Добавить карту в поданные
         this.submittedCards.set(playerId, cardText);
-
         // Если ВСЕ игроки (включая гуру) подали карты, переходим к голосованию
         if (this.submittedCards.size === this.players.size) {
             this.gameState = 'voting';
         }
-
         return true;
     }
 
@@ -230,6 +224,9 @@ class Game {
         };
     }
 }
+
+// Таймеры на удаление игроков по playerId
+const disconnectTimers = new Map();
 
 // Socket.IO обработчики
 io.on('connection', (socket) => {
@@ -363,29 +360,90 @@ io.on('connection', (socket) => {
         }
     });
 
+    socket.on('reconnectPlayer', (data) => {
+        const { playerId, gameId, playerName } = data;
+        const game = games.get(gameId);
+        if (!game) {
+            socket.emit('error', { message: 'Игра не найдена' });
+            return;
+        }
+        const player = game.players.get(playerId);
+        if (!player) {
+            socket.emit('error', { message: 'Игрок не найден в этой игре' });
+            return;
+        }
+        // Обновляем socket.id и статус
+        game.players.delete(playerId);
+        player.id = socket.id;
+        player.connected = true;
+        game.players.set(socket.id, player);
+        // Обновляем ссылки на socket
+        socket.join(gameId);
+        socket.gameId = gameId;
+        socket.playerId = socket.id;
+        // Обновляем гуру, если надо
+        if (game.currentGuru === playerId) {
+            game.currentGuru = socket.id;
+        }
+        // Обновляем очки
+        if (game.scores.has(playerId)) {
+            const score = game.scores.get(playerId);
+            game.scores.delete(playerId);
+            game.scores.set(socket.id, score);
+        }
+        // Удаляем таймер удаления, если был
+        if (disconnectTimers.has(playerId)) {
+            clearTimeout(disconnectTimers.get(playerId));
+            disconnectTimers.delete(playerId);
+        }
+        // Отправляем игроку его состояние
+        socket.emit('reconnected', {
+            gameId,
+            game: game.getGameState(),
+            hand: player.hand,
+            playerId: socket.id
+        });
+        // Всем остальным обновляем список игроков
+        socket.to(gameId).emit('playerJoined', {
+            game: game.getGameState()
+        });
+    });
+
     socket.on('disconnect', () => {
         console.log('Пользователь отключился:', socket.id);
         
         if (socket.gameId) {
             const game = games.get(socket.gameId);
             if (game) {
-                // Проверяем, был ли отключившийся игрок Гуру
-                const wasGuru = game.currentGuru === socket.id;
-                
-                game.removePlayer(socket.id);
-                
-                if (game.players.size === 0) {
-                    games.delete(socket.gameId);
-                } else {
-                    // Если отключился Гуру и есть другие игроки, выбираем нового Гуру
-                    if (wasGuru && game.players.size > 0) {
-                        game.selectRandomGuru();
-                        console.log('Выбран новый Гуру после отключения:', game.currentGuru);
-                    }
-                    
-                    socket.to(socket.gameId).emit('playerLeft', {
-                        game: game.getGameState()
-                    });
+                const player = game.players.get(socket.id);
+                if (player) {
+                    player.connected = false;
+                    // Запускаем таймер на удаление игрока через 60 секунд
+                    const timer = setTimeout(() => {
+                        // Проверяем, не вернулся ли игрок
+                        const p = game.players.get(socket.id);
+                        if (p && !p.connected) {
+                            // Проверяем, был ли отключившийся игрок Гуру
+                            const wasGuru = game.currentGuru === socket.id;
+                            game.players.delete(socket.id);
+                            game.scores.delete(socket.id);
+                            game.submittedCards.delete(socket.id);
+                            if (game.players.size === 0) {
+                                games.delete(socket.gameId);
+                            } else {
+                                // Если отключился Гуру и есть другие игроки, выбираем нового Гуру
+                                if (wasGuru && game.players.size > 0) {
+                                    game.selectRandomGuru();
+                                    console.log('Выбран новый Гуру после отключения:', game.currentGuru);
+                                }
+                                io.to(socket.gameId).emit('playerLeft', {
+                                    game: game.getGameState()
+                                });
+                            }
+                        }
+                        disconnectTimers.delete(socket.id);
+                    }, 60000); // 60 секунд
+                    disconnectTimers.set(socket.id, timer);
                 }
             }
         }
