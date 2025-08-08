@@ -159,8 +159,12 @@ class Game {
         player.selectedCard = cardText;
         // Добавить карту в поданные
         this.submittedCards.set(playerId, cardText);
-        // Если ВСЕ игроки (включая гуру) подали карты, переходим к голосованию
-        if (this.submittedCards.size === this.players.size) {
+        // Переход к голосованию, когда все НЕ-Гуру и подключенные игроки подали карты
+        const allEligibleSubmitted = Array.from(this.players.values()).every(p => {
+            // Гуру не подаёт карту, а отключенные игроки не учитываются
+            return p.isGuru || !p.connected || this.submittedCards.has(p.id);
+        });
+        if (allEligibleSubmitted && this.submittedCards.size > 0) {
             this.gameState = 'voting';
         }
         return true;
@@ -418,6 +422,43 @@ io.on('connection', (socket) => {
                 const player = game.players.get(socket.id);
                 if (player) {
                     player.connected = false;
+
+                    // Если отключился текущий Гуру — немедленно назначаем нового из подключенных игроков
+                    const wasGuruNow = game.currentGuru === socket.id;
+                    if (wasGuruNow) {
+                        const connectedCandidates = Array
+                            .from(game.players.values())
+                            .filter(p => p.connected && p.id !== socket.id);
+
+                        if (connectedCandidates.length > 0) {
+                            // Сбросить статус гуру у всех и назначить нового из подключённых
+                            for (const pl of game.players.values()) {
+                                pl.isGuru = false;
+                            }
+                            const newGuru = connectedCandidates[Math.floor(Math.random() * connectedCandidates.length)];
+                            game.currentGuru = newGuru.id;
+                            newGuru.isGuru = true;
+
+                            // Если у нового Гуру была подана карта — отменяем её подачу
+                            if (game.submittedCards.has(newGuru.id)) {
+                                game.submittedCards.delete(newGuru.id);
+                                newGuru.selectedCard = null;
+                            }
+
+                            // Если все остальные (подключённые и не-Гуру) уже подали — переходим к голосованию
+                            const allEligibleSubmitted = Array.from(game.players.values()).every(p => {
+                                return p.isGuru || !p.connected || game.submittedCards.has(p.id);
+                            });
+                            if (allEligibleSubmitted && game.submittedCards.size > 0) {
+                                game.gameState = 'voting';
+                            }
+
+                            // Уведомляем всех об обновлении состояния (для обновления роли Гуру и UI)
+                            io.to(socket.gameId).emit('gameUpdated', {
+                                game: game.getGameState()
+                            });
+                        }
+                    }
                     // Запускаем таймер на удаление игрока через 60 секунд
                     const timer = setTimeout(() => {
                         // Проверяем, не вернулся ли игрок

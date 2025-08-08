@@ -26,6 +26,8 @@ class NotificationSystem {
     }
 
     show(message, type = 'info', title = '', duration = 3000) {
+        // Показываем не больше одного уведомления: сначала очищаем предыдущие
+        this.clearAll(true);
         const notification = this.createNotification(message, type, title, duration);
         this.container.appendChild(notification);
         this.notifications.push(notification);
@@ -36,6 +38,20 @@ class NotificationSystem {
         }, duration);
 
         return notification;
+    }
+
+    clearAll(immediate = false) {
+        while (this.notifications.length) {
+            const n = this.notifications.pop();
+            if (!n) continue;
+            if (immediate) {
+                if (n.parentNode) {
+                    n.parentNode.removeChild(n);
+                }
+            } else {
+                this.remove(n);
+            }
+        }
     }
 
     createNotification(message, type, title, duration) {
@@ -74,21 +90,10 @@ class NotificationSystem {
         }
     }
 
-    success(message, title = 'Успех!') {
-        return this.show(message, 'success', title);
-    }
-
-    error(message, title = 'Ошибка!') {
-        return this.show(message, 'error', title);
-    }
-
-    info(message, title = 'Информация') {
-        return this.show(message, 'info', title);
-    }
-
-    warning(message, title = 'Внимание!') {
-        return this.show(message, 'warning', title);
-    }
+    success(message, title = 'Успех!') { return this.show(message, 'success', title); }
+    error(message, title = 'Ошибка!') { return this.show(message, 'error', title); }
+    info(message, title = 'Информация') { return this.show(message, 'info', title); }
+    warning(message, title = 'Внимание!') { return this.show(message, 'warning', title); }
 }
 
 const notifications = new NotificationSystem();
@@ -224,6 +229,7 @@ socket.on('gameCreated', (data) => {
     const newUrl = `${window.location.origin}${window.location.pathname}?game=${data.gameId}`;
     window.history.replaceState(null, '', newUrl);
     
+    // Важное уведомление: игра создана
     notifications.success(`Игра создана! ID: ${data.gameId}`, 'Игра создана');
     updateGameInfo();
     updatePlayersList();
@@ -240,6 +246,7 @@ socket.on('gameJoined', (data) => {
     header.style.display = 'none';
     gameDiv.style.display = 'block';
     
+    // Важное уведомление: присоединение прошло успешно
     notifications.success('Вы успешно присоединились к игре!', 'Присоединение');
     updateGameInfo();
     updatePlayersList();
@@ -248,25 +255,22 @@ socket.on('gameJoined', (data) => {
 
 socket.on('playerJoined', (data) => {
     gameState = data.game;
-    // Найти нового игрока (последний в списке)
-    const newPlayer = gameState.players[gameState.players.length - 1];
-    if (newPlayer) {
-        notifications.info(`${newPlayer.name} присоединился к игре`, 'Новый игрок');
-    }
+    // Больше не показываем уведомления о каждом присоединившемся игроке, просто обновляем список
     updateGameInfo();
     updatePlayersList();
 });
 
 socket.on('playerLeft', (data) => {
     gameState = data.game;
-    notifications.warning('Игрок покинул игру', 'Игрок отключился');
+    // Убираем частые уведомления, состояние видно в списке игроков
     updateGameInfo();
     updatePlayersList();
 });
 
 socket.on('gameStarted', (data) => {
     gameState = data.game;
-    notifications.success('Игра началась! Удачи!', 'Начало игры');
+    // Важное уведомление: старт игры
+    notifications.success('Игра началась!', 'Начало игры');
     updateGameInfo();
     updatePlayersList();
 });
@@ -282,16 +286,16 @@ socket.on('handUpdated', (data) => {
 
 socket.on('gameUpdated', (data) => {
     gameState = data.game;
-    
+    // Если мы стали Гуру, очищаем локально выбранную карту и скрываем руку
+    const currentPlayer = gameState.players.find(p => p.id === playerId);
+    if (currentPlayer?.isGuru) {
+        selectedCard = null;
+        handDiv.style.display = 'none';
+    }
+
     // Уведомление о переходе к голосованию
     if (gameState.gameState === 'voting') {
-        const currentPlayer = gameState.players.find(p => p.id === playerId);
-        if (currentPlayer?.isGuru) {
-            notifications.info('Все карты собраны! Выберите лучший ответ', 'Время голосования');
-        } else {
-            notifications.info('Все карты собраны! Ждите решения Гуру', 'Время голосования');
-        }
-        // Скрыть карты на руке когда все игроки выбрали карты
+        // Без вспомогательных уведомлений – интерфейс подскажет
         handDiv.style.display = 'none';
     }
     
@@ -311,9 +315,8 @@ socket.on('roundEnded', (data) => {
     const cardDisplay = selectedCardDisplay.querySelector('h3');
     cardDisplay.textContent = "Победитель:";
     selectedCardContent.textContent = winnerCardText;
-    setTimeout(() => {
-        notifications.info(`Победитель раунда: ${winnerName}!`, 'Раунд окончен');
-    }, 1000);
+    // Важное уведомление: окончание раунда
+    setTimeout(() => { notifications.info(`Победитель: ${winnerName}`, 'Раунд окончен'); }, 700);
     
 });
 
@@ -327,11 +330,7 @@ socket.on('newRound', (data) => {
     selectedCardContent.textContent = '';
     
     const currentPlayer = gameState.players.find(p => p.id === playerId);
-    if (currentPlayer?.isGuru) {
-        notifications.info('Вы стали Гуру этого раунда!', 'Новая роль');
-    } else {
-        notifications.info('Начался новый раунд. Выберите карту!', 'Новый раунд');
-    }
+    // Без дополнительных уведомлений о смене роли – видно в статусе "Гуру"
     
     updateGameInfo();
     updatePlayersList();
@@ -363,7 +362,8 @@ socket.on('reconnected', (data) => {
     playerId = data.playerId;
     playerHand = data.hand;
     currentGameId = data.gameId;
-    notifications.success('Сессия восстановлена!', 'Переподключение');
+    // Важное уведомление: переподключение успешно
+    notifications.success('Сессия восстановлена', 'Переподключение');
     lobby.style.display = 'none';
     header.style.display = 'none';
     gameDiv.style.display = 'block';
@@ -379,6 +379,7 @@ function updateGameInfo() {
     const currentPlayer = gameState.players.find(p => p.id === playerId);
     const isGuru = currentPlayer?.isGuru || false;
     const isHost = currentPlayer?.isHost || false;
+    const guruPlayer = gameState.players.find(p => p.isGuru);
     
     let html = `
         <div class="status">
@@ -387,6 +388,13 @@ function updateGameInfo() {
         </div>
     `;
     
+    // Информация о текущем гуру
+    html += `
+        <div class="status">
+            <strong>Гуру:</strong> ${guruPlayer ? guruPlayer.name : '—'}${guruPlayer && guruPlayer.id === playerId ? ' (Вы)' : ''}
+        </div>
+    `;
+
     // Темная карта
     if (gameState.currentDarkCard) {
         html += `<div class="dark-card">${gameState.currentDarkCard}</div>`;
@@ -406,7 +414,16 @@ function updateHand() {
         return;
     }
     
+    const currentPlayer = gameState.players.find(p => p.id === playerId);
+    if (currentPlayer?.isGuru) {
+        // Скрываем руку у гуру в фазе выбора карт
+        handDiv.innerHTML = '';
+        handDiv.style.display = 'none';
+        return;
+    }
+
     handDiv.innerHTML = '';
+    handDiv.style.display = 'flex';
     playerHand.forEach(card => {
         const cardDiv = document.createElement('div');
         cardDiv.className = 'card';
@@ -423,11 +440,11 @@ function updateHand() {
 }
 
 function selectCard(card) {
-    // const currentPlayer = gameState.players.find(p => p.id === playerId);
-    // if (currentPlayer?.isGuru) {
-    //     notifications.error('Вы не можете подавать карты', 'Ошибка');
-    //     return;
-    // }
+    const currentPlayer = gameState.players.find(p => p.id === playerId);
+    if (currentPlayer?.isGuru) {
+        notifications.error('Гуру не подаёт карты в этом раунде', 'Недоступно');
+        return;
+    }
 
     if (gameState?.gameState !== 'playing') return;
     
